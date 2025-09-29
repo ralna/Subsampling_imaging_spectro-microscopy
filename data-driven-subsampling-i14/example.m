@@ -39,9 +39,9 @@ A_sparseRISStensor = reshape(A_sparseRISS, [nE, nY, nX]);
 
 % We show the sparsity pattern of two consecutive frames
 figure(1)
-subplot(3,2,1), imshow(reshape(A_sparseRISStensor(100, :, :), nY, nX))
+subplot(4,2,1), imshow(reshape(A_sparseRISStensor(100, :, :), nY, nX))
 title("Sparsity pattern frame 100 from RISS")
-subplot(3,2,2), imshow(reshape(A_sparseRISStensor(101, :, :), nY, nX))
+subplot(4,2,2), imshow(reshape(A_sparseRISStensor(101, :, :), nY, nX))
 title("Sparsity pattern frame 101 from RISS")
 
 %% Let's try CUR now
@@ -59,9 +59,9 @@ A_sparseCURISStensor = reshape(A_sparseCURISS, [nE, nY, nX]);
 
 % We show the sparsity pattern of two consecutive frames
 figure(1)
-subplot(3,2,3), imshow(reshape(A_sparseCURISStensor(100, :, :), nY, nX))
+subplot(4,2,3), imshow(reshape(A_sparseCURISStensor(100, :, :), nY, nX))
 title("Sparsity pattern frame 100 from CURISS")
-subplot(3,2,4), imshow(reshape(A_sparseCURISStensor(101, :, :), nY, nX))
+subplot(4,2,4), imshow(reshape(A_sparseCURISStensor(101, :, :), nY, nX))
 title("Sparsity pattern frame 101 from CURISS")
 
 %% Reconstruct CURISS
@@ -75,7 +75,55 @@ U = A_sparseCURISS(energyIndicesCURISS, pixel_indicesCUR);
 A_completed = (C/Ru) * (Qu' * R);
 
 figure(1)
-subplot(3,2,5), imagesc(reshape(A_completed(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off,
+subplot(4,2,5), imagesc(reshape(A_completed(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off,
 title("Frame 100 completed using CURISS")
-subplot(3,2,6), imagesc(reshape(A(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off
+subplot(4,2,6), imagesc(reshape(A(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off
+title("Frame 100 from full data")
+
+%% Let's try ACURISS now
+
+% Set parameters for ACURISS
+p0 = 0.02;
+maxIte = 30;
+tolCompletionVar = 1e-3;
+tolSpectralVar = 1e-3;
+% Clustering for spectra
+S_abstract = 3;
+numCluster = 4;
+% PostEdgeEnergyIndex
+post_edge_energy = 7.2*1e3;
+[~, postEdgeEnergyIndex] = min(abs(energy - post_edge_energy));
+% You need codes for the cluster analysis
+addpath("../clustering_codes/")
+
+% Run ACURISS
+[energiesToSampleACURISS,spatialRowsToSampleACURISS,energyIndicesACURISS] = ...
+ACURISS(A,p0,spectrumDictionary,energy,nX,nY,maxIte, ...
+            tolCompletionVar,tolSpectralVar,S_abstract,...
+    numCluster,postEdgeEnergyIndex);
+
+% A little bit of work to transform this to a sparsity pattern
+pixellabels = reshape(1:(nX*nY), nY, nX);
+OmegaACURISS = zeros(size(A)); OmegaACURISS = logical(OmegaACURISS);
+OmegaACURISS(energyIndicesACURISS, :) = 1;
+pixel_indicesCUR_A = pixellabels(spatialRowsToSampleACURISS', :);
+OmegaACURISS(:, reshape(pixel_indicesCUR_A, 1, [])) = 1;
+
+A_sparseACURISS = A .* OmegaACURISS;
+A_sparseACURISStensor = reshape(A_sparseACURISS, [nE, nY, nX]);
+
+%% Reconstruct ACURISS
+% Get C, U, and R
+C = A_sparseACURISS(:, pixel_indicesCUR_A);
+R = A_sparseACURISS(energyIndicesACURISS, :);
+U = A_sparseACURISS(energyIndicesACURISS, pixel_indicesCUR_A);
+
+% Invert U in a stable manner
+[Qu,Ru] = qr(U, 'econ');
+A_completed = (C/Ru) * (Qu' * R);
+
+figure(1)
+subplot(4,2,7), imagesc(reshape(A_completed(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off,
+title("Frame 100 completed using ACURISS")
+subplot(4,2,8), imagesc(reshape(A(100, :, :), nY, nX), [0 max(A_completed,[], 'all')]), axis off
 title("Frame 100 from full data")
